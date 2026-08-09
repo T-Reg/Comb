@@ -1,14 +1,7 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+//! Comb is a content-defined chunking (CDC) engine and delivery client for efficiently distributing
+//! large, frequently updated binaries such as games, VM images, and ML artifacts.
+//! This API includes the chunking algorithm that splits the data into chunks and assigns a hash to
+//! each chunk using a fast rolling hash algorithm.
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+mod gear;
+mod chunk;
