@@ -3,5 +3,5 @@
 //! This API includes the chunking algorithm that splits the data into chunks and assigns a hash to
 //! each chunk using a fast rolling hash algorithm.
 
-mod gear;
 mod chunk;
+mod gear;
