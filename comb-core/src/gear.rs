@@ -1,10 +1,12 @@
+// Simple, fast rolling gear hash from FastCDC
+
 // SplitMix64, reference implementation by Sebastiano Vigna (public domain):
 // https://prng.di.unimi.it/splitmix64.c
 // This is a very common algorithm for generating pseudo-random numbers
 // state: the seed or the state from previous iteration
 // returns:  the random number generated this run and the state after this run (to be fed to next
 // iteration)
-const fn splitmix64_next(mut state: u64) -> (u64, u64) {
+pub const fn splitmix64_next(mut state: u64) -> (u64, u64) {
     state = state.wrapping_add(0x9E3779B97F4A7C15);
     let mut z = state;
     z = (z ^ (z >> 30)).wrapping_mul(0xBF58476D1CE4E5B9);
@@ -30,13 +32,13 @@ pub type GearTable = [u64; 256];
 
 const DEFAULT_TABLE: GearTable = build_table();
 
-pub struct Hasher<'t> {
+pub struct RollingHasher<'t> {
     table: &'t GearTable,
     state: u64
 }
 
-impl<'t> Hasher<'t> {
-    pub fn new(table: &'t GearTable) -> Hasher<'t> {
+impl<'t> RollingHasher<'t> {
+    pub fn new(table: &'t GearTable) -> RollingHasher<'t> {
         Self { table, state: 0 }
     }
 
@@ -55,26 +57,23 @@ impl<'t> Hasher<'t> {
         &self.state
     }
 
-    fn roll_byte(&mut self, byte: & u8) {
+    pub fn roll_byte(&mut self, byte: & u8) {
         self.state = (self.state << 1).wrapping_add(self.table[*byte as usize]);
     }
 }
 
-impl Default for Hasher<'static> {
-    fn default() -> Self { Self { table: &DEFAULT_TABLE, state: 0 } }
+impl Default for RollingHasher<'static> {
+    fn default() -> Self { Self::new(&DEFAULT_TABLE) }
 }
-
-
 
 #[cfg(test)]
 mod tests {
-    use crate::gear::{ DEFAULT_TABLE, Hasher };
-    use crate::gear::splitmix64_next;
+    use crate::gear::{DEFAULT_TABLE, RollingHasher, splitmix64_next};
     use gearhash::Hasher as external_hasher;
 
     #[test]
     fn is_match_tests() {
-        let mut hasher = Hasher::default();
+        let mut hasher = RollingHasher::default();
         hasher.state = 0xF;
         assert!(hasher.is_match(0x10));
         assert!(!hasher.is_match(0x11));
@@ -103,10 +102,10 @@ mod tests {
             0x3
         ];
 
-        let mut hasher = Hasher::default();
+        let mut hasher = RollingHasher::default();
         let mut comb_results: [u64; 10] = [0; 10];
         for i in 0..10 {
-            hasher.roll_bytes(&bytes);
+            hasher.roll_bytes(&bytes[0..i+1]);
             comb_results[i] = hasher.state;
         }
 
@@ -115,7 +114,6 @@ mod tests {
         for i in 0..10 {
             hasher.update(&bytes[0..i+1]);
             gearhash_results[i] = hasher.get_hash();
-            hasher.set_hash(0);
         }
 
         assert_eq!(gearhash_results, comb_results);
@@ -137,5 +135,13 @@ mod tests {
             (x, state) = splitmix64_next(state);
             assert_eq!(x, expected[i]);
         }
+    }
+
+    #[test]
+    fn reset_tests() {
+        let mut hasher = RollingHasher::default();
+        hasher.state = 0xF;
+        hasher.reset();
+        assert_eq!(hasher.state, 0);
     }
 }
