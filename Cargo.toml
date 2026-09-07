@@ -3,3 +3,27 @@ resolver = "2"
 members = [
     "comb-core",
 ]
+
+# Fields every member crate shares. Members opt in per field with the
+# `field.workspace = true` form, so licence and edition live in exactly one
+# place as the crate count grows through Phases 3-6.
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/T-Reg/Comb"
+
+# Lints are declared once here and inherited by any crate carrying
+# `[lints] workspace = true`. Without that opt-in line these tables do nothing.
+[workspace.lints.rust]
+# Downgrade to "deny" with per-block allows when the SIMD path lands in Phase 7.
+unsafe_code = "forbid"
+# The design is the pitch, so public doc comments are part of the deliverable.
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+# Lint groups need an explicit negative priority so that individual lint
+# settings, which default to priority 0, are applied afterwards and win.
+pedantic = { level = "warn", priority = -1 }

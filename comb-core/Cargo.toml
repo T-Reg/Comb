@@ -1,9 +1,13 @@
 [package]
 name = "comb-core"
-version = "0.1.0"
-edition = "2024"
-license = "MIT OR Apache-2.0"
+description = "Hashless hierarchical content-defined chunking engine"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 
-[dev-dependencies]
+[lints]
+workspace = true
