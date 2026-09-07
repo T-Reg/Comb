@@ -1,0 +1,6 @@
+# Comb is developed from two checkouts of this repo: a Windows desktop and an
+# aarch64 Linux box. Normalizing to LF in the repository *and* in every working
+# tree keeps the two byte-identical, so corpus files and benchmark inputs
+# compare cleanly across machines and no checkout ever shows phantom
+# whole-file diffs. RustRover, rustfmt and cargo all handle LF natively.
+* text=auto eol=lf
