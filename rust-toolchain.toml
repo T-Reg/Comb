@@ -1,0 +1,11 @@
+# Pinned, not floating. Comb commits benchmark numbers that Phase 7 quotes a
+# before/after against, and a comparison across two compiler versions is not a
+# comparison. This also keeps the Windows desktop, the aarch64 Linux box and CI
+# on one toolchain; they had drifted to 1.97.1 and 1.98.1 respectively.
+#
+# Components are per-toolchain, so listing them here is what makes a fresh
+# install of this channel actually able to run `cargo fmt` and `cargo clippy`.
+[toolchain]
+channel = "1.98.1"
+components = ["clippy", "rustfmt"]
+profile = "minimal"
