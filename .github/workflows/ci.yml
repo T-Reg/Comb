@@ -18,9 +18,13 @@ env:
   # Warnings are errors for rustc itself, not just for clippy.
   RUSTFLAGS: -D warnings
 
+# The toolchain and its components come from rust-toolchain.toml, so no job
+# below names a version. Changing the pin changes CI with it.
 jobs:
-  check:
-    name: Build, test, lint
+  # Formatting and lints are platform-independent, so they run once rather
+  # than three times.
+  lint:
+    name: Format and lint
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,8 +32,6 @@ jobs:
 
       - name: Install Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          components: clippy, rustfmt
 
       - name: Formatting
         run: cargo fmt --all --check
@@ -38,8 +40,24 @@ jobs:
         if: ${{ !cancelled() }}
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
 
+  # Boundary identity has to hold across platforms (DESIGN.md 8), which is
+  # what this matrix exists to prove once the chunker lands in Phase 1.
+  test:
+    name: Build and test (${{ matrix.os }})
+    strategy:
+      # Without this a Windows failure cancels macOS before it reports.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
       - name: Build
-        if: ${{ !cancelled() }}
         run: cargo build --workspace --all-targets
 
       - name: Test
