@@ -2,3 +2,4 @@
 //! large, frequently updated binaries such as games, VM images, and ML artifacts.
 
 pub mod chunk_id;
+pub mod boundary;
