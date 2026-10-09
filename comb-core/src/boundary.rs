@@ -2,13 +2,17 @@
 
 pub mod reference;
 pub mod extremum;
+mod local_max;
+
+#[cfg(test)]
+mod test_support;
 
 use std::range::Range;
 
 /// Statistics about the boundary scan (ie. bytes scanned)
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct ScanStats {
-    /// bytes scanned
+    /// number of bytes considered for boundary.
     pub bytes_scanned: u64,
 
     /// boundaries created as a result of rules boundary rules, as opposed to
