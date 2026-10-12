@@ -4,3 +4,6 @@
 pub mod boundary;
 pub mod chunk_id;
 pub mod chunk;
+
+#[cfg(test)]
+mod test_support;

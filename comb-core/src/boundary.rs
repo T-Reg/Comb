@@ -10,7 +10,7 @@ mod test_support;
 use std::range::Range;
 
 /// Statistics about the boundary scan (ie. bytes scanned)
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct ScanStats {
     /// number of bytes considered for boundary.
     pub bytes_scanned: u64,
@@ -18,6 +18,16 @@ pub struct ScanStats {
     /// boundaries created as a result of rules boundary rules, as opposed to
     /// something like max size clamp.
     pub rule_cuts: u64,
+}
+
+impl ScanStats {
+    /// built with zero'd or default values
+    pub fn empty() -> Self {
+        Self {
+            bytes_scanned: 0,
+            rule_cuts: 0,
+        }
+    }
 }
 
 /// Finds chunk boundaries in the passed data.

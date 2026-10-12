@@ -105,9 +105,8 @@ mod tests {
     use crate::boundary::test_support::validate_backwards_range;
     use crate::boundary::test_support::validate_end_0;
     use crate::boundary::reference::Reference;
-    use crate::boundary::test_support::{assert_same, mixed_data, Rng, REAL_FILES};
-
-    const HS: [usize; 9] = [0, 1, 2, 3, 5, 8, 16, 33, 64];
+    use crate::boundary::test_support::{assert_same, REAL_FILES};
+    use crate::test_support::{ mixed_data, Rng, HS };
     
     #[test]
     fn find_boundaries_happy_h1() {
