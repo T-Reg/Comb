@@ -5,7 +5,7 @@ use std::range::Range;
 /// Calculate big endian 8 byte value at a location.
 #[inline]
 pub(super) fn value_at(data: &[u8], index: usize) -> u64 {
-    u64::from_be_bytes(data[index..index+8].try_into().unwrap())
+    u64::from_be_bytes(data[index..index + 8].try_into().unwrap())
 }
 
 pub(super) fn calculate_scan_bounds(range: &Range<usize>,

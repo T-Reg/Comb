@@ -41,6 +41,11 @@ impl Reference {
 
 impl BoundaryFinder for Reference {
     fn find_boundaries(&self, data: &[u8], range: Range<usize>, out: &mut Vec<usize>) -> ScanStats {
+        // manually make one chunk if data size is too tiny to make even one u64 out of the bytes.
+        if data.len() < 8 {
+            return ScanStats::empty();
+        }
+        
         let (start, end) = calculate_scan_bounds(&range, data.len(), self.h);
         let mut rule_cuts_count = 0;
         for i in start..=end {

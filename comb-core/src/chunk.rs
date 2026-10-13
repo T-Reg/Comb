@@ -149,7 +149,9 @@ pub fn reassemble_chunks(chunks: &Vec<Chunk>, data_store: &HashMap<ChunkId, Vec<
 
 #[cfg(test)]
 mod tests {
-    use super::{ chunk_range, reassemble_chunks, BoundaryKind };
+    use super::{ chunk_range, reassemble_chunks, BoundaryKind, Chunk, DataReassemblyError };
+    use crate::chunk_id::ChunkId;
+    use crate::boundary::ScanStats;
     use crate::test_support::{ Rng, mixed_data, HS };
     use crate::boundary::extremum::Extremum;
     use crate::boundary::reference::Reference;
@@ -226,36 +228,93 @@ mod tests {
 
     #[test]
     fn test_chunk_one_byte_file() {
-        
+        let data: [u8; 1] = [10];
+        for h in HS {
+            let finder = Extremum::new(h);
+            let (chunks, _stats) = chunk_range(&data, (0..1).into(), &finder);
+
+            assert_eq!(chunks.len(), 1, "Expected one chunk when data size is one.");
+            assert_eq!(chunks[0], Chunk {
+                id: ChunkId::calculate(&data),
+                offset: 0,
+                len: 1,
+                end: BoundaryKind::RangeEnd,
+            }, "The single chunk did not cover the whole one byte file.");
+        }
     }
 
     #[test]
     fn test_chunk_empty_data() {
-        
+        // an empty range inside non-empty data gives no chunks and no scan work
+        let data = &CASES[0];
+        let mid = data.len() / 2;
+        let finder = Extremum::new(1);
+        let (chunks, stats) = chunk_range(data, (mid..mid).into(), &finder);
+
+        assert!(chunks.is_empty(), "Expected no chunks for an empty range.");
+        assert_eq!(stats, ScanStats::empty(), "Expected empty ScanStats for an empty range.");
     }
 
     #[test]
+    #[should_panic(expected = "invalid range: start > end")]
     fn test_chunk_invalid_range() {
-        
+        let data = &CASES[0];
+        let finder = Extremum::new(1);
+        chunk_range(data, (data.len()..0).into(), &finder);
     }
 
     #[test]
+    #[should_panic(expected = "invalid range: end > data length")]
     fn test_chunk_walks_outside_data_len() {
-        
+        let data = &CASES[0];
+        let finder = Extremum::new(1);
+        chunk_range(data, (0..data.len() + 1).into(), &finder);
     }
 
     #[test]
+    #[should_panic(expected = "invalid range: end == 0")]
     fn test_chunk_end_is_0() {
-        
+        let data = &CASES[0];
+        let finder = Extremum::new(1);
+        chunk_range(data, (0..0).into(), &finder);
     }
 
     #[test]
     fn test_reassemble_not_in_data_store() {
-        
+        let data = &CASES[0];
+        let finder = Extremum::new(1);
+        let (chunks, _stats) = chunk_range(data, (0..data.len()).into(), &finder);
+
+        let mut data_store = HashMap::new();
+        for chunk in &chunks {
+            data_store.insert(chunk.id, data[chunk.offset..chunk.end_pos()].to_vec());
+        }
+
+        // remove by id rather than skipping the insert, since identical chunks share an id
+        let missing = chunks[chunks.len() - 1].id;
+        data_store.remove(&missing);
+        assert_eq!(reassemble_chunks(&chunks, &data_store),
+            Err(DataReassemblyError::MissingChunk(missing)),
+            "Expected MissingChunk error for the chunk left out of the data store.");
     }
 
     #[test]
     fn test_reassemble_mismatch_length() {
-        
+        let data = &CASES[0];
+        let finder = Extremum::new(1);
+        let (chunks, _stats) = chunk_range(data, (0..data.len()).into(), &finder);
+
+        let mut data_store = HashMap::new();
+        for chunk in &chunks {
+            data_store.insert(chunk.id, data[chunk.offset..chunk.end_pos()].to_vec());
+        }
+
+        // corrupt the first chunk by adding an extra byte
+        let first = &chunks[0];
+        data_store.get_mut(&first.id).unwrap().push(0);
+
+        assert_eq!(reassemble_chunks(&chunks, &data_store),
+            Err(DataReassemblyError::LengthMismatch { id: first.id, exp: first.len, act: first.len + 1 }),
+            "Expected LengthMismatch error for the chunk with an extra byte.");
     }
 }

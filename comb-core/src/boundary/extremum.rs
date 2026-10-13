@@ -67,6 +67,11 @@ impl Extremum {
 
 impl BoundaryFinder for Extremum {
     fn find_boundaries(&self, data: &[u8], range: Range<usize>, out: &mut Vec<usize>) -> ScanStats {
+        // manually make one chunk if data size is too tiny to make even one u64 out of the bytes.
+        if data.len() < 8{
+            return ScanStats::empty();
+        }
+        
         let (start, end) = calculate_scan_bounds(&range, data.len(), self.h);
         let mut rule_cuts_count = 0;
         
@@ -116,6 +121,11 @@ mod tests {
     #[test]
     fn find_boundaries_happy_h2() {
         validate_happy_h2(Extremum::new);
+    }
+
+    #[test]
+    fn find_boundary_data_len_less_than_8() {
+        
     }
 
     #[test]
