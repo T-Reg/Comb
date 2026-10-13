@@ -9,6 +9,8 @@ mod test_support;
 
 use std::range::Range;
 
+const MAX_CHUNK_LEN_MEAN_MULTIPLIER: usize = 8;
+
 /// Statistics about the boundary scan (ie. bytes scanned)
 #[derive(Debug, PartialEq, Eq)]
 pub struct ScanStats {
@@ -46,7 +48,8 @@ pub trait BoundaryFinder {
 
     /// the max chunk size at which point we clamp and declare an arbitrary chunk boundary.
     /// by default, it is 8 x mean_chunk_size.
+    #[inline]
     fn max_chunk_size(&self) -> usize {
-        8 * self.mean_chunk_size()
+        MAX_CHUNK_LEN_MEAN_MULTIPLIER * self.mean_chunk_size()
     }
 }
