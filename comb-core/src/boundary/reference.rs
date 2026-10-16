@@ -1,12 +1,12 @@
-//! A slow naive boundary finder for testing that finds boundaries based on local maximums, 
+//! A slow naive boundary finder for testing that finds boundaries based on local maximums,
 //! same as extremum.rs except how it does it is much slower and meant for testing/validating.
 
-use std::range::Range;
+use super::local_max::calculate_scan_bounds;
+use super::local_max::extremum_mean_chunk_size;
+use super::local_max::value_at;
 use crate::boundary::BoundaryFinder;
 use crate::boundary::ScanStats;
-use super::local_max::value_at;
-use super::local_max::extremum_mean_chunk_size;
-use super::local_max::calculate_scan_bounds;
+use std::range::Range;
 
 /// Boundary finder with a naive slow implementation
 #[derive(Debug)]
@@ -37,7 +37,7 @@ impl BoundaryFinder for Reference {
         if data.len() < 8 {
             return ScanStats::empty();
         }
-        
+
         let (start, end) = calculate_scan_bounds(&range, data.len(), self.h);
 
         // no position has a full window inside the data and range, so nothing to scan.
@@ -62,12 +62,12 @@ impl BoundaryFinder for Reference {
 #[cfg(test)]
 mod tests {
     use super::Reference;
-    use crate::boundary::test_support::validate_happy_h1;
-    use crate::boundary::test_support::validate_happy_h2;
     use crate::boundary::test_support::validate_backwards_range;
     use crate::boundary::test_support::validate_end_0;
+    use crate::boundary::test_support::validate_happy_h1;
+    use crate::boundary::test_support::validate_happy_h2;
     use crate::boundary::test_support::validate_short_data;
-    
+
     #[test]
     fn find_boundaries_happy_h1() {
         validate_happy_h1(Reference::new);

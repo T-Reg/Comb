@@ -1,15 +1,15 @@
 //! Chunking layer that uses the boundary finder to build the actual chunks from data.
 
-use crate::chunk_id::ChunkId;
 use crate::boundary::BoundaryFinder;
 use crate::boundary::ScanStats;
-use std::range::Range;
+use crate::chunk_id::ChunkId;
 use std::collections::HashMap;
-use std::fmt::Display;
 use std::error::Error;
 use std::fmt;
+use std::fmt::Display;
 use std::fmt::Formatter;
 use std::hash::BuildHasher;
+use std::range::Range;
 
 /// The whole reason we are here: one chunk of the data.
 #[derive(Debug, PartialEq, Eq)]
@@ -24,12 +24,23 @@ pub struct Chunk {
     pub len: usize,
 
     /// the type of boundary for the end of this chunk.
-    /// for example, if the end of the chunk was cut due to a 
+    /// for example, if the end of the chunk was cut due to a
     /// max size clamp, the type is "Clamp"
     pub end: BoundaryKind,
 }
 
 impl Chunk {
+    /// Constructor to build a chunk for the given data range and end boundary kind.
+    #[must_use]
+    pub fn new(data: &[u8], range: Range<usize>, end: BoundaryKind) -> Self {
+        Self {
+            id: ChunkId::calculate(&data[range.start..range.end]),
+            offset: range.start,
+            len: range.end - range.start,
+            end,
+        }
+    }
+
     /// The index of the last byte in the chunk, exclusive.
     #[must_use]
     pub fn end_pos(&self) -> usize {
@@ -85,19 +96,20 @@ impl ChunkingStats {
 /// Error when reassembling data chunks
 #[derive(Debug, PartialEq, Eq)]
 pub enum DataReassemblyError {
-    /// Chunk was not in the data store.  Can happen if some data gets corrupted 
+    /// Chunk was not in the data store.  Can happen if some data gets corrupted
     /// deleted or the download failed.
     MissingChunk(ChunkId),
 
-    /// the chunk's metadata expected a different amount of bytes than the actual chunk in 
+    /// the chunk's metadata expected a different amount of bytes than the actual chunk in
     /// the data store.
     LengthMismatch {
         /// chunk id of the chunk with length mismatch.
-        id: ChunkId, 
+        id: ChunkId,
         /// expected size based on chunk metadata.
         exp: usize,
         /// actual size observed in the data store.
-        act: usize },
+        act: usize,
+    },
 }
 
 impl Error for DataReassemblyError {}
@@ -105,8 +117,14 @@ impl Error for DataReassemblyError {}
 impl Display for DataReassemblyError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            Self::MissingChunk(id) => write!(f, "Chunk with id {id} was not found in the data store during data reassembly."),
-            Self::LengthMismatch { id, exp, act } => write!(f, "Chunk with id {id} had length of {act} instead of expected length {exp}.")
+            Self::MissingChunk(id) => write!(
+                f,
+                "Chunk with id {id} was not found in the data store during data reassembly."
+            ),
+            Self::LengthMismatch { id, exp, act } => write!(
+                f,
+                "Chunk with id {id} had length of {act} instead of expected length {exp}."
+            ),
         }
     }
 }
@@ -118,69 +136,60 @@ impl Display for DataReassemblyError {
 ///
 /// - if range.start > range.end
 /// - if range.end > `data.len()`
-/// - if range.end <= 0
-pub fn chunk_range<F : BoundaryFinder>(data: &[u8], range: Range<usize>, finder: &F) -> (Vec<Chunk>, ChunkingStats) {
+/// - if `finder.max_chunk_size` == 0
+pub fn chunk_range<F: BoundaryFinder + ?Sized>(
+    data: &[u8],
+    range: Range<usize>,
+    finder: &F,
+) -> (Vec<Chunk>, ChunkingStats) {
     assert!(range.start <= range.end, "invalid range: start > end");
     assert!(range.end <= data.len(), "invalid range: end > data length");
-    assert!(range.end > 0, "invalid range: end == 0");
-    
-    if range.end == range.start {
+
+    let max_len = finder.max_chunk_size();
+    assert!(max_len > 0, "finder.max_chunk_size cannot be 0.");
+
+    if range.is_empty() {
         return (Vec::new(), ChunkingStats::empty());
     }
-    
+
     let mut boundary_indexes = Vec::new();
     let scan_stats = finder.find_boundaries(data, range, &mut boundary_indexes);
 
-    let mut chunks = Vec::new();
     let mut stats = ChunkingStats::new(scan_stats);
     let mut start = range.start;
     let max_len = finder.max_chunk_size();
-    for &index in &boundary_indexes {
+
+    let boundaries: Vec<_> = boundary_indexes
+        .into_iter()
+        .map(|b| (b, BoundaryKind::Rule))
+        .chain(std::iter::once((range.end, BoundaryKind::RangeEnd)))
+        .collect();
+
+    let mut chunk_cuts = Vec::with_capacity(boundaries.len());
+    for (index, kind) in boundaries {
         // If this chunk would be larger than the max chunk len, make clamped chunks
         while index - start > max_len {
-            push_clamped_chunk(data, start, max_len, &mut chunks);
+            chunk_cuts.push((start, max_len, BoundaryKind::Clamp));
             start += max_len;
             stats.clamp_cuts += 1;
         }
-        
-        chunks.push(Chunk {
-            id: ChunkId::calculate(&data[start..index]),
-            offset: start,
-            len: index - start,
-            end: BoundaryKind::Rule,
-        });
+
+        chunk_cuts.push((start, index - start, kind));
         start = index;
     }
 
-    // one last chunk at the end
-    while range.end - start > max_len {
-        push_clamped_chunk(data, start, max_len, &mut chunks);
-        start += max_len;
-        stats.clamp_cuts += 1;
-    }
-    chunks.push(Chunk {
-        id: ChunkId::calculate(&data[start..range.end]),
-        offset: start,
-        len: range.end - start,
-        end: BoundaryKind::RangeEnd,
-    });
+    let chunks = chunk_cuts
+        .into_iter()
+        .map(|c| Chunk::new(data, (c.0..c.0 + c.1).into(), c.2))
+        .collect();
 
     (chunks, stats)
-}
-
-fn push_clamped_chunk(data: &[u8], start: usize, max_len: usize, chunks: &mut Vec<Chunk>) {
-    chunks.push(Chunk {
-        id: ChunkId::calculate(&data[start..(start + max_len)]),
-        offset: start,
-        len: max_len,
-        end: BoundaryKind::Clamp,
-    });
 }
 
 /// Reassembles chunks in correct order to rebuild the original bytes.
 /// for now using an in memory store as we build this out.  But the complete
 /// version must support on disk or s3 data stores.
-/// Checks if the data len matches up, but doesn't check for certain the data 
+/// Checks if the data len matches up, but doesn't check for certain the data
 /// isn't corrupt or changed.  That is planned for later though.
 ///
 /// # Errors
@@ -188,15 +197,23 @@ fn push_clamped_chunk(data: &[u8], start: usize, max_len: usize, chunks: &mut Ve
 /// - `MissingChunk`: Could not find a specific chunk in the data store with the `ChunkId`
 /// - `LengthMismatch`: The chunk found in the data store did not match the len of the
 ///   chunk's metadata.
-pub fn reassemble_chunks<S: BuildHasher>(chunks: &Vec<Chunk>, data_store: &HashMap<ChunkId, Vec<u8>, S>) -> Result<Vec<u8>, DataReassemblyError> {
+pub fn reassemble_chunks<S: BuildHasher>(
+    chunks: &Vec<Chunk>,
+    data_store: &HashMap<ChunkId, Vec<u8>, S>,
+) -> Result<Vec<u8>, DataReassemblyError> {
     let mut result = Vec::new();
 
     for chunk in chunks {
-        let bytes = data_store.get(&chunk.id)
+        let bytes = data_store
+            .get(&chunk.id)
             .ok_or(DataReassemblyError::MissingChunk(chunk.id))?;
-        
+
         if bytes.len() != chunk.len {
-            return Err(DataReassemblyError::LengthMismatch { id: chunk.id, exp: chunk.len, act: bytes.len() });
+            return Err(DataReassemblyError::LengthMismatch {
+                id: chunk.id,
+                exp: chunk.len,
+                act: bytes.len(),
+            });
         }
 
         result.extend_from_slice(bytes);
@@ -207,24 +224,26 @@ pub fn reassemble_chunks<S: BuildHasher>(chunks: &Vec<Chunk>, data_store: &HashM
 
 #[cfg(test)]
 mod tests {
-    use super::{ chunk_range, reassemble_chunks, BoundaryKind, Chunk, DataReassemblyError };
-    use crate::chunk_id::ChunkId;
-    use crate::boundary::{ BoundaryFinder, ScanStats };
-    use crate::test_support::{ Rng, mixed_data, HS };
+    use super::{BoundaryKind, Chunk, DataReassemblyError, chunk_range, reassemble_chunks};
     use crate::boundary::extremum::Extremum;
     use crate::boundary::reference::Reference;
+    use crate::boundary::{BoundaryFinder, ScanStats};
+    use crate::chunk_id::ChunkId;
+    use crate::test_support::{HS, Rng, mixed_data};
     use std::collections::HashMap;
     use std::range::Range;
     use std::sync::LazyLock;
 
     static CASES: LazyLock<Vec<Vec<u8>>> = LazyLock::new(|| {
-        (0..30u64).map(|seed| {
-            let mut rng = Rng::new(seed);
-            let len = 1 + rng.below(2000);
-            mixed_data(&mut rng, len)
-        }).collect()
+        (0..30u64)
+            .map(|seed| {
+                let mut rng = Rng::new(seed);
+                let len = 1 + rng.below(2000);
+                mixed_data(&mut rng, len)
+            })
+            .collect()
     });
-    
+
     #[test]
     fn test_chunk_full_data() {
         for data in CASES.iter() {
@@ -248,20 +267,42 @@ mod tests {
 
             // chunks and stats agree with reference
             assert_eq!(chunks, ref_chunks, "Chunks did not match reference chunks.");
-            assert_eq!(stats, ref_stats, "ScanStats did not match reference ScanStats.");
+            assert_eq!(
+                stats, ref_stats,
+                "ScanStats did not match reference ScanStats."
+            );
 
             // first chunk starts at start, last chunk ends at the end
-            assert_eq!(chunks[0].offset, range.start, "the first data chunk did not start on expected index.");
+            assert_eq!(
+                chunks[0].offset, range.start,
+                "the first data chunk did not start on expected index."
+            );
             let last_chunk = &chunks[chunks.len() - 1];
-            assert_eq!(last_chunk.end_pos(), range.end, "the last data chunk didn't end on expected index.");
-            assert_eq!(last_chunk.end, BoundaryKind::RangeEnd, "The last chunk had unexpected boundary kind.");
+            assert_eq!(
+                last_chunk.end_pos(),
+                range.end,
+                "the last data chunk didn't end on expected index."
+            );
+            assert_eq!(
+                last_chunk.end,
+                BoundaryKind::RangeEnd,
+                "The last chunk had unexpected boundary kind."
+            );
 
             // no chunk is over max size, and every clamp chunk is exactly max size
             let max_size = finder.max_chunk_size();
             for chunk in &chunks {
-                assert!(chunk.len <= max_size, "chunk at {} was longer than max size.", chunk.offset);
+                assert!(
+                    chunk.len <= max_size,
+                    "chunk at {} was longer than max size.",
+                    chunk.offset
+                );
                 if chunk.end == BoundaryKind::Clamp {
-                    assert_eq!(chunk.len, max_size, "clamp chunk at {} was not max size.", chunk.offset);
+                    assert_eq!(
+                        chunk.len, max_size,
+                        "clamp chunk at {} was not max size.",
+                        chunk.offset
+                    );
                 }
             }
 
@@ -271,7 +312,11 @@ mod tests {
                 for i in 0..chunks.len() - 1 {
                     let chunk_1 = &chunks[i];
                     let chunk_2 = &chunks[i + 1];
-                    assert_eq!(chunk_1.end_pos(), chunk_2.offset, "Two adjacent chunks have indexes that don't line up.");
+                    assert_eq!(
+                        chunk_1.end_pos(),
+                        chunk_2.offset,
+                        "Two adjacent chunks have indexes that don't line up."
+                    );
                 }
             }
 
@@ -283,8 +328,12 @@ mod tests {
             // reassemble the chunks and assert the data the same as before
             match reassemble_chunks(&chunks, &data_store) {
                 Ok(reassembled) => {
-                    assert_eq!(&reassembled, &data[range.start..range.end], "reassembled data did not original data.");
-                },
+                    assert_eq!(
+                        &reassembled,
+                        &data[range.start..range.end],
+                        "reassembled data did not original data."
+                    );
+                }
                 Err(e) => {
                     panic!("hit unexpected error reassembling the data: {}", e);
                 }
@@ -304,16 +353,29 @@ mod tests {
         assert_eq!(chunks.len(), 10, "expected 10 chunks");
         for (i, chunk) in chunks.iter().enumerate() {
             let exp_start = i * max_size;
-            assert_eq!(chunk, &Chunk{
-                id: ChunkId::calculate(&data[exp_start..exp_start + max_size]),
-                offset: exp_start,
-                len: max_size,
-                end: if i == chunks.len() - 1 { BoundaryKind::RangeEnd } else { BoundaryKind::Clamp },
-            });
+            assert_eq!(
+                chunk,
+                &Chunk {
+                    id: ChunkId::calculate(&data[exp_start..exp_start + max_size]),
+                    offset: exp_start,
+                    len: max_size,
+                    end: if i == chunks.len() - 1 {
+                        BoundaryKind::RangeEnd
+                    } else {
+                        BoundaryKind::Clamp
+                    },
+                }
+            );
         }
 
-        assert_eq!(stats.scan_stats.rule_cuts, 0, "expected no rule cuts in repeated bytes.");
-        assert_eq!(stats.clamp_cuts, 9, "expected 9 clamp cuts in repeated bytes of this len.");
+        assert_eq!(
+            stats.scan_stats.rule_cuts, 0,
+            "expected no rule cuts in repeated bytes."
+        );
+        assert_eq!(
+            stats.clamp_cuts, 9,
+            "expected 9 clamp cuts in repeated bytes of this len."
+        );
     }
 
     #[test]
@@ -328,12 +390,19 @@ mod tests {
 
         assert_eq!(chunks.len(), 3, "expected 3 chunks");
         for (i, chunk) in chunks.iter().enumerate() {
-            assert_eq!(chunk.offset, start + i * max_size, "chunk {i} did not start at range.start + k * max_size.");
+            assert_eq!(
+                chunk.offset,
+                start + i * max_size,
+                "chunk {i} did not start at range.start + k * max_size."
+            );
             assert_eq!(chunk.len, max_size, "chunk {i} was not max_size long.");
         }
 
         assert_eq!(stats.scan_stats.rule_cuts, 0, "expected no rule cuts.");
-        assert_eq!(stats.clamp_cuts, 2, "expected 2 clamp cuts in repeated bytes of this len.");
+        assert_eq!(
+            stats.clamp_cuts, 2,
+            "expected 2 clamp cuts in repeated bytes of this len."
+        );
     }
 
     #[test]
@@ -353,29 +422,54 @@ mod tests {
 
         // the gap between rule boundaries that spans the 0xFF run
         let mut prev = range.start;
-        let (gap_start, gap_end) = rule_bounds.iter()
+        let (gap_start, gap_end) = rule_bounds
+            .iter()
             .find_map(|&b| {
                 let gap = (prev, b);
                 prev = b;
                 (b - gap.0 > max_size).then_some(gap)
             })
             .expect("expected a gap between rule boundaries longer than max_size");
-        assert_ne!(gap_start % max_size, 0, "test data is weak: gap start is on the k * max_size grid.");
+        assert_ne!(
+            gap_start % max_size,
+            0,
+            "test data is weak: gap start is on the k * max_size grid."
+        );
 
         // inside the gap: clamps every max_size from gap_start, then a Rule chunk up to gap_end
-        let first = chunks.iter().position(|c| c.offset == gap_start)
+        let first = chunks
+            .iter()
+            .position(|c| c.offset == gap_start)
             .expect("no chunk starts at the rule boundary before the gap");
         let mut offset = gap_start;
         for chunk in &chunks[first..] {
             if gap_end - offset > max_size {
-                assert_eq!(chunk.offset, offset, "clamp chunk did not start max_size after the previous cut.");
+                assert_eq!(
+                    chunk.offset, offset,
+                    "clamp chunk did not start max_size after the previous cut."
+                );
                 assert_eq!(chunk.len, max_size, "clamp chunk was not max_size long.");
-                assert_eq!(chunk.end, BoundaryKind::Clamp, "expected a Clamp chunk inside the gap.");
+                assert_eq!(
+                    chunk.end,
+                    BoundaryKind::Clamp,
+                    "expected a Clamp chunk inside the gap."
+                );
                 offset += max_size;
             } else {
-                assert_eq!(chunk.offset, offset, "last chunk in the gap started in the wrong place.");
-                assert_eq!(chunk.end_pos(), gap_end, "last chunk in the gap did not end on the rule boundary.");
-                assert_eq!(chunk.end, BoundaryKind::Rule, "last chunk in the gap should end on a rule boundary.");
+                assert_eq!(
+                    chunk.offset, offset,
+                    "last chunk in the gap started in the wrong place."
+                );
+                assert_eq!(
+                    chunk.end_pos(),
+                    gap_end,
+                    "last chunk in the gap did not end on the rule boundary."
+                );
+                assert_eq!(
+                    chunk.end,
+                    BoundaryKind::Rule,
+                    "last chunk in the gap should end on a rule boundary."
+                );
                 break;
             }
         }
@@ -392,7 +486,11 @@ mod tests {
 
         assert_eq!(chunks.len(), 1, "expected a single chunk");
         assert_eq!(chunks[0].len, max_size, "chunk was not max_size long.");
-        assert_eq!(chunks[0].end, BoundaryKind::RangeEnd, "chunk of exactly max_size should not be clamped.");
+        assert_eq!(
+            chunks[0].end,
+            BoundaryKind::RangeEnd,
+            "chunk of exactly max_size should not be clamped."
+        );
         assert_eq!(stats.scan_stats.rule_cuts, 0, "expected no rule cuts.");
         assert_eq!(stats.clamp_cuts, 0, "expected no clamp cuts.");
     }
@@ -406,8 +504,16 @@ mod tests {
         let (chunks, _stats) = chunk_range(&data, (0..data.len()).into(), &finder);
 
         assert_eq!(chunks.len(), 2, "expected two chunks");
-        assert_eq!((chunks[0].len, &chunks[0].end), (max_size, &BoundaryKind::Clamp), "first chunk should be a full clamp.");
-        assert_eq!((chunks[1].len, &chunks[1].end), (1, &BoundaryKind::RangeEnd), "second chunk should be the one leftover byte.");
+        assert_eq!(
+            (chunks[0].len, &chunks[0].end),
+            (max_size, &BoundaryKind::Clamp),
+            "first chunk should be a full clamp."
+        );
+        assert_eq!(
+            (chunks[1].len, &chunks[1].end),
+            (1, &BoundaryKind::RangeEnd),
+            "second chunk should be the one leftover byte."
+        );
     }
 
     #[test]
@@ -418,12 +524,16 @@ mod tests {
             let (chunks, _stats) = chunk_range(&data, (0..1).into(), &finder);
 
             assert_eq!(chunks.len(), 1, "Expected one chunk when data size is one.");
-            assert_eq!(chunks[0], Chunk {
-                id: ChunkId::calculate(&data),
-                offset: 0,
-                len: 1,
-                end: BoundaryKind::RangeEnd,
-            }, "The single chunk did not cover the whole one byte file.");
+            assert_eq!(
+                chunks[0],
+                Chunk {
+                    id: ChunkId::calculate(&data),
+                    offset: 0,
+                    len: 1,
+                    end: BoundaryKind::RangeEnd,
+                },
+                "The single chunk did not cover the whole one byte file."
+            );
         }
     }
 
@@ -436,7 +546,11 @@ mod tests {
         let (chunks, stats) = chunk_range(data, (mid..mid).into(), &finder);
 
         assert!(chunks.is_empty(), "Expected no chunks for an empty range.");
-        assert_eq!(stats.scan_stats, ScanStats::empty(), "Expected empty ScanStats for an empty range.");
+        assert_eq!(
+            stats.scan_stats,
+            ScanStats::empty(),
+            "Expected empty ScanStats for an empty range."
+        );
         assert_eq!(stats.clamp_cuts, 0, "Expected no clamp cuts in empty data.");
     }
 
@@ -457,11 +571,28 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "invalid range: end == 0")]
-    fn test_chunk_end_is_0() {
+    #[should_panic(expected = "finder.max_chunk_size cannot be 0.")]
+    fn test_max_len_0() {
         let data = &CASES[0];
-        let finder = Extremum::new(1);
-        chunk_range(data, (0..0).into(), &finder);
+        let finder = BadFinder {};
+        chunk_range(data, (0..10).into(), &finder);
+    }
+
+    struct BadFinder {}
+
+    impl BoundaryFinder for BadFinder {
+        fn find_boundaries(
+            &self,
+            _data: &[u8],
+            _range: Range<usize>,
+            _out: &mut Vec<usize>,
+        ) -> ScanStats {
+            ScanStats::empty()
+        }
+
+        fn mean_chunk_size(&self) -> usize {
+            0
+        }
     }
 
     #[test]
@@ -478,9 +609,11 @@ mod tests {
         // remove by id rather than skipping the insert, since identical chunks share an id
         let missing = chunks[chunks.len() - 1].id;
         data_store.remove(&missing);
-        assert_eq!(reassemble_chunks(&chunks, &data_store),
+        assert_eq!(
+            reassemble_chunks(&chunks, &data_store),
             Err(DataReassemblyError::MissingChunk(missing)),
-            "Expected MissingChunk error for the chunk left out of the data store.");
+            "Expected MissingChunk error for the chunk left out of the data store."
+        );
     }
 
     #[test]
@@ -498,8 +631,14 @@ mod tests {
         let first = &chunks[0];
         data_store.get_mut(&first.id).unwrap().push(0);
 
-        assert_eq!(reassemble_chunks(&chunks, &data_store),
-            Err(DataReassemblyError::LengthMismatch { id: first.id, exp: first.len, act: first.len + 1 }),
-            "Expected LengthMismatch error for the chunk with an extra byte.");
+        assert_eq!(
+            reassemble_chunks(&chunks, &data_store),
+            Err(DataReassemblyError::LengthMismatch {
+                id: first.id,
+                exp: first.len,
+                act: first.len + 1
+            }),
+            "Expected LengthMismatch error for the chunk with an extra byte."
+        );
     }
 }

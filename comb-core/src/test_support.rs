@@ -1,4 +1,3 @@
-
 pub(super) const HS: [usize; 9] = [0, 1, 2, 3, 5, 8, 16, 33, 64];
 
 /// Tiny deterministic PRNG (xorshift64) so failures are reproducible from the seed.
@@ -24,7 +23,6 @@ impl Rng {
         (self.next() % n as u64) as usize
     }
 }
-
 
 /// Data built from short segments of different shapes, each chosen to stress
 /// a different part of the deque algorithm.

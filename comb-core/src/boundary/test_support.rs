@@ -1,11 +1,10 @@
-use std::range::Range;
 use super::{BoundaryFinder, ScanStats};
+use std::range::Range;
 
-pub(super) const TEST_DATA: [u8; 32] = 
-        [50, 12, 127, 1, 230, 71, 60, 0, 
-        1, 1, 1, 1, 200, 199, 2, 3,
-        4, 5, 6, 7, 8, 7, 6, 100, 
-        99, 98, 97, 34, 3, 3, 90, 91];
+pub(super) const TEST_DATA: [u8; 32] = [
+    50, 12, 127, 1, 230, 71, 60, 0, 1, 1, 1, 1, 200, 199, 2, 3, 4, 5, 6, 7, 8, 7, 6, 100, 99, 98,
+    97, 34, 3, 3, 90, 91,
+];
 
 pub(super) fn validate_happy_h1<F: BoundaryFinder>(new: fn(usize) -> F) {
     let finder = new(1);
@@ -85,9 +84,17 @@ pub(super) fn validate_short_data<F: BoundaryFinder>(new: fn(usize) -> F) {
 
             if len < min_len {
                 assert_eq!(output, vec![], "h {h}, len {len}: expected no boundaries.");
-                assert_eq!(stats, ScanStats::empty(), "h {h}, len {len}: expected empty stats.");
+                assert_eq!(
+                    stats,
+                    ScanStats::empty(),
+                    "h {h}, len {len}: expected empty stats."
+                );
             } else {
-                assert_eq!(output, vec![h], "h {h}, len {len}: expected only the peak at h.");
+                assert_eq!(
+                    output,
+                    vec![h],
+                    "h {h}, len {len}: expected only the peak at h."
+                );
             }
         }
     }
@@ -114,6 +121,12 @@ pub(super) fn assert_same<E: BoundaryFinder, A: BoundaryFinder>(
     let expected_stats = expected.find_boundaries(data, range, &mut expected_out);
     let actual_stats = actual.find_boundaries(data, range, &mut actual_out);
 
-    assert_eq!(actual_out, expected_out, "boundaries differ: {context}, range {range:?}");
-    assert_eq!(actual_stats, expected_stats, "stats differ: {context}, range {range:?}");
+    assert_eq!(
+        actual_out, expected_out,
+        "boundaries differ: {context}, range {range:?}"
+    );
+    assert_eq!(
+        actual_stats, expected_stats,
+        "stats differ: {context}, range {range:?}"
+    );
 }

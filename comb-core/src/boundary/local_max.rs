@@ -8,12 +8,15 @@ pub(super) fn value_at(data: &[u8], index: usize) -> u64 {
     u64::from_be_bytes(data[index..index + 8].try_into().unwrap())
 }
 
-pub(super) fn calculate_scan_bounds(range: &Range<usize>,
-  data_len: usize, h: usize) -> (usize, usize) {
+pub(super) fn calculate_scan_bounds(
+    range: &Range<usize>,
+    data_len: usize,
+    h: usize,
+) -> (usize, usize) {
     assert!(range.start <= range.end, "invalid range: start > end");
     assert!(range.end <= data_len, "invalid range: end > data length");
     assert!(range.end > 0, "invalid range: end == 0");
-        
+
     let start = std::cmp::max(h, range.start + 1);
     let end = std::cmp::min(range.end - 1, data_len.saturating_sub(8 + h));
     (start, end)

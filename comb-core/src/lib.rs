@@ -2,8 +2,8 @@
 //! large, frequently updated binaries such as games, VM images, and ML artifacts.
 
 pub mod boundary;
-pub mod chunk_id;
 pub mod chunk;
+pub mod chunk_id;
 
 #[cfg(test)]
 mod test_support;

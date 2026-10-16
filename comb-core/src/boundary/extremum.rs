@@ -3,14 +3,14 @@
 //! in reference.rs. Computes in one clean pass with <= 2 comparisons
 //! per position.  Suitable for real use.
 
-use std::range::Range;
-use std::cmp::Ordering;
-use super::local_max::value_at;
-use super::local_max::extremum_mean_chunk_size;
 use super::local_max::calculate_scan_bounds;
+use super::local_max::extremum_mean_chunk_size;
+use super::local_max::value_at;
 use crate::boundary::BoundaryFinder;
 use crate::boundary::ScanStats;
+use std::cmp::Ordering;
 use std::collections::VecDeque;
+use std::range::Range;
 
 /// Finds boundaries based on local maximums.
 /// say p(i) is the byte vale at index i. A position, p(i), is a
@@ -25,19 +25,17 @@ impl Extremum {
     /// boundary if it is the strict maximum within (p - h)..(p + h).
     #[must_use]
     pub fn new(h: usize) -> Self {
-        Self {
-            h,
-        }
+        Self { h }
     }
 }
 
 impl BoundaryFinder for Extremum {
     fn find_boundaries(&self, data: &[u8], range: Range<usize>, out: &mut Vec<usize>) -> ScanStats {
         // manually make one chunk if data size is too tiny to make even one u64 out of the bytes.
-        if data.len() < 8{
+        if data.len() < 8 {
             return ScanStats::empty();
         }
-        
+
         let (start, end) = calculate_scan_bounds(&range, data.len(), self.h);
 
         // no position has a full window inside the data and range, so nothing to scan.
@@ -69,7 +67,7 @@ impl BoundaryFinder for Extremum {
 struct Window {
     // key: index/location of the byte in data
     // value: the 8 byte value returned from value_at
-    mem: VecDeque::<(usize, u64)>,
+    mem: VecDeque<(usize, u64)>,
 
     // the algorithm checks the right side of the [i - h, i + h] window with
     // it's comparisons. This bit tracks whether the mem.front() also passes
@@ -88,7 +86,7 @@ impl Window {
             passes_left_check: false,
         }
     }
-    
+
     fn is_boundary(&mut self, data: &[u8], i: usize) -> Option<usize> {
         let val_i = value_at(data, i);
         // expire entries that are now out of the window
@@ -103,11 +101,11 @@ impl Window {
             match v.cmp(&val_i) {
                 Ordering::Less => {
                     self.mem.pop_back();
-                },
+                }
                 Ordering::Equal => {
                     tie = true;
                     self.mem.pop_back();
-                },
+                }
                 Ordering::Greater => break,
             }
         }
@@ -120,24 +118,24 @@ impl Window {
 
         self.mem.push_back((i, val_i));
 
-        let passes_right_check = i >= self.h && self.mem.front().is_some_and(|&(idx, _)| idx == i - self.h);
-        (passes_right_check && self.passes_left_check)
-            .then(|| i - self.h)
+        let passes_right_check =
+            i >= self.h && self.mem.front().is_some_and(|&(idx, _)| idx == i - self.h);
+        (passes_right_check && self.passes_left_check).then(|| i - self.h)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Extremum;
-    use crate::boundary::test_support::validate_happy_h1;
-    use crate::boundary::test_support::validate_happy_h2;
+    use crate::boundary::reference::Reference;
     use crate::boundary::test_support::validate_backwards_range;
     use crate::boundary::test_support::validate_end_0;
+    use crate::boundary::test_support::validate_happy_h1;
+    use crate::boundary::test_support::validate_happy_h2;
     use crate::boundary::test_support::validate_short_data;
-    use crate::boundary::reference::Reference;
-    use crate::boundary::test_support::{assert_same, REAL_FILES};
-    use crate::test_support::{ mixed_data, Rng, HS };
-    
+    use crate::boundary::test_support::{REAL_FILES, assert_same};
+    use crate::test_support::{HS, Rng, mixed_data};
+
     #[test]
     fn find_boundaries_happy_h1() {
         validate_happy_h1(Extremum::new);
@@ -180,7 +178,7 @@ mod tests {
                 assert_same(&reference, &extremum, &data, (0..len).into(), &context);
 
                 for _ in 0..10 {
-                    let end = 1 + rng.below(len);   // end >= 1: end == 0 is a deliberate panic
+                    let end = 1 + rng.below(len); // end >= 1: end == 0 is a deliberate panic
                     let start = rng.below(end + 1); // start <= end
                     assert_same(&reference, &extremum, &data, (start..end).into(), &context);
                 }

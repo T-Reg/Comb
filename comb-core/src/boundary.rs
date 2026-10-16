@@ -1,8 +1,8 @@
 //! Finds chunk boundaries in a dataset
 
-pub mod reference;
 pub mod extremum;
 mod local_max;
+pub mod reference;
 
 #[cfg(test)]
 mod test_support;
@@ -39,7 +39,7 @@ pub trait BoundaryFinder {
     /// All boundaries, p, will be appended in ascending order and satisfy:
     /// range.start < p < range.end
     /// 'data' is the whole file. The whole file is passed due to the necesity of accessing
-    /// data outside the range near the range boundaries due to extremum algorithm sliding 
+    /// data outside the range near the range boundaries due to extremum algorithm sliding
     /// window calculations
     /// At tier 1, the range is just `0..data.len()`
     fn find_boundaries(&self, data: &[u8], range: Range<usize>, out: &mut Vec<usize>) -> ScanStats;
