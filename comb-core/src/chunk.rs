@@ -9,6 +9,7 @@ use std::fmt::Display;
 use std::error::Error;
 use std::fmt;
 use std::fmt::Formatter;
+use std::hash::BuildHasher;
 
 /// The whole reason we are here: one chunk of the data.
 #[derive(Debug, PartialEq, Eq)]
@@ -181,16 +182,19 @@ fn push_clamped_chunk(data: &[u8], start: usize, max_len: usize, chunks: &mut Ve
 /// version must support on disk or s3 data stores.
 /// Checks if the data len matches up, but doesn't check for certain the data 
 /// isn't corrupt or changed.  That is planned for later though.
-pub fn reassemble_chunks(chunks: &Vec<Chunk>, data_store: &HashMap<ChunkId, Vec<u8>>) -> Result<Vec<u8>, DataReassemblyError> {
+///
+/// # Errors
+///
+/// - `MissingChunk`: Could not find a specific chunk in the data store with the `ChunkId`
+/// - `LengthMismatch`: The chunk found in the data store did not match the len of the
+///   chunk's metadata.
+pub fn reassemble_chunks<S: BuildHasher>(chunks: &Vec<Chunk>, data_store: &HashMap<ChunkId, Vec<u8>, S>) -> Result<Vec<u8>, DataReassemblyError> {
     let mut result = Vec::new();
 
     for chunk in chunks {
-        if !data_store.contains_key(&chunk.id) {
-            return Err(DataReassemblyError::MissingChunk(chunk.id));
-        }
-        
         let bytes = data_store.get(&chunk.id)
-            .expect("Failed to get chunk bytes from data store.");
+            .ok_or(DataReassemblyError::MissingChunk(chunk.id))?;
+        
         if bytes.len() != chunk.len {
             return Err(DataReassemblyError::LengthMismatch { id: chunk.id, exp: chunk.len, act: bytes.len() });
         }

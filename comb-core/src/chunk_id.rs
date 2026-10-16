@@ -78,7 +78,9 @@ impl FromStr for ChunkId {
             let low = low_char.to_digit(16)
                 .ok_or(ParseChunkIdError::InvalidCharacter(low_char))?;
 
-            bytes[i] = ((high << 4) | low) as u8;
+            #[expect(clippy::cast_possible_truncation, reason = "high and low are <16, truncation will never happen.")]
+            let b = ((high << 4) | low) as u8;
+            bytes[i] = b;
         }
         
         Ok(ChunkId(bytes))
