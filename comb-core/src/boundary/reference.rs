@@ -18,24 +18,15 @@ impl Reference {
     /// Constructor where h is the window size for boundary rule. A position, p, is a
     /// boundary if it is the strict maximum within (p - h)..(p + h).
     pub fn new(h: usize) -> Self {
-        Self {
-            h: h,
-        }
+        Self { h }
     }
 
-    fn is_boundary(&self, data: &[u8], index: usize) -> bool {
-        let val = value_at(data, index);
-        for other in (index - &self.h)..=(index + &self.h) {
-            if other == index {
-                continue;
-            }
-                
-            if value_at(data, other) >= val {
-                return false;
-            }
-        }
-
-        return true;
+    /// p is a boundary if every other entry in its window is strictly smaller.
+    fn is_boundary(&self, data: &[u8], p: usize) -> bool {
+        let val = value_at(data, p);
+        ((p - self.h)..=(p + self.h))
+            .filter(|&other| other != p)
+            .all(|other| value_at(data, other) < val)
     }
 }
 
@@ -47,17 +38,18 @@ impl BoundaryFinder for Reference {
         }
         
         let (start, end) = calculate_scan_bounds(&range, data.len(), self.h);
-        let mut rule_cuts_count = 0;
-        for i in start..=end {
-            if self.is_boundary(data, i) {
-                rule_cuts_count += 1;
-                out.push(i as usize);
-            }
+
+        // no position has a full window inside the data and range, so nothing to scan.
+        if start > end {
+            return ScanStats::empty();
         }
 
+        let len_b4 = out.len();
+        out.extend((start..=end).filter(|&p| self.is_boundary(data, p)));
+
         ScanStats {
-            bytes_scanned: (end+ 1).saturating_sub(start) as u64,
-            rule_cuts: rule_cuts_count,
+            bytes_scanned: (end + 1 - start) as u64,
+            rule_cuts: (out.len() - len_b4) as u64,
         }
     }
 
@@ -73,6 +65,7 @@ mod tests {
     use crate::boundary::test_support::validate_happy_h2;
     use crate::boundary::test_support::validate_backwards_range;
     use crate::boundary::test_support::validate_end_0;
+    use crate::boundary::test_support::validate_short_data;
     
     #[test]
     fn find_boundaries_happy_h1() {
@@ -82,6 +75,11 @@ mod tests {
     #[test]
     fn find_boundaries_happy_h2() {
         validate_happy_h2(Reference::new);
+    }
+
+    #[test]
+    fn find_boundaries_short_data() {
+        validate_short_data(Reference::new);
     }
 
     #[test]

@@ -25,43 +25,8 @@ impl Extremum {
     /// boundary if it is the strict maximum within (p - h)..(p + h).
     pub fn new(h: usize) -> Self {
         Self {
-            h: h,
+            h,
         }
-    }
-
-    fn is_boundary(&self, data: &[u8], i: usize, mem: &mut VecDeque<(usize, u64)>, passes_left_check: &mut bool) -> bool {
-        let val_i = value_at(data, i);
-        // expire entries that are now out of the window
-        if i >= self.h && mem.front().is_some_and(|&(idx, _)| idx < i - self.h) {
-            mem.pop_front();
-            *passes_left_check = false;
-        }
-
-        // take out anything smaller than F(i) as they're not maximums anymore
-        let mut tie = false;
-        while let Some(&(_, v)) = mem.back() {
-            match v.cmp(&val_i) {
-                Ordering::Less => {
-                    mem.pop_back();
-                },
-                Ordering::Equal => {
-                    tie = true;
-                    mem.pop_back();
-                },
-                Ordering::Greater => break,
-            }
-        }
-
-        // if at this point we cleared the whole deque, left check passed
-        // baring any ties
-        if mem.is_empty() {
-            *passes_left_check = !tie;
-        }
-
-        mem.push_back((i, val_i));
-
-        let passes_right_check = i >= self.h && mem.front().is_some_and(|&(idx, _)| idx == i - self.h);
-        return passes_right_check && *passes_left_check;
     }
 }
 
@@ -73,32 +38,90 @@ impl BoundaryFinder for Extremum {
         }
         
         let (start, end) = calculate_scan_bounds(&range, data.len(), self.h);
-        let mut rule_cuts_count = 0;
-        
-        // key: index/location
-        // value: the 8 byte value returned from value_at
-        let mut mem: VecDeque<(usize, u64)>= VecDeque::with_capacity(self.h + 1);
 
-        // the algorithm checks the right side of the [i - h, i + h] window with
-        // it's comparisons. This bit tracks whether the mem.front() also passes
-        // the left side check
-        let mut passes_left_check = false;
-
-        for i in (start - self.h)..=(end + self.h) {
-            if self.is_boundary(data, i, &mut mem, &mut passes_left_check) && i - self.h >= start {
-                rule_cuts_count += 1;
-                out.push((i - self.h) as usize);
-            }
+        // no position has a full window inside the data and range, so nothing to scan.
+        // without this the loop below still reads entries up to end + h, past the data.
+        if start > end {
+            return ScanStats::empty();
         }
 
+        let mut window = Window::new(self.h);
+
+        let len_b4 = out.len();
+        out.extend(
+            ((start - self.h)..=(end + self.h))
+                .filter_map(|i| window.is_boundary(data, i))
+                .filter(|i| *i >= start),
+        );
+
         ScanStats {
-            bytes_scanned: (end+ 1).saturating_sub(start) as u64,
-            rule_cuts: rule_cuts_count,
+            bytes_scanned: (end + 1).saturating_sub(start) as u64,
+            rule_cuts: (out.len() - len_b4) as u64,
         }
     }
 
     fn mean_chunk_size(&self) -> usize {
         extremum_mean_chunk_size(self.h)
+    }
+}
+
+struct Window {
+    // key: index/location of the byte in data
+    // value: the 8 byte value returned from value_at
+    mem: VecDeque::<(usize, u64)>,
+
+    // the algorithm checks the right side of the [i - h, i + h] window with
+    // it's comparisons. This bit tracks whether the mem.front() also passes
+    // the left side check
+    passes_left_check: bool,
+
+    // window size
+    h: usize,
+}
+
+impl Window {
+    fn new(h: usize) -> Self {
+        Self {
+            h,
+            mem: VecDeque::with_capacity(h + 1),
+            passes_left_check: false,
+        }
+    }
+    
+    fn is_boundary(&mut self, data: &[u8], i: usize) -> Option<usize> {
+        let val_i = value_at(data, i);
+        // expire entries that are now out of the window
+        if i >= self.h && self.mem.front().is_some_and(|&(idx, _)| idx < i - self.h) {
+            self.mem.pop_front();
+            self.passes_left_check = false;
+        }
+
+        // take out anything smaller than F(i) as they're not maximums anymore
+        let mut tie = false;
+        while let Some(&(_, v)) = self.mem.back() {
+            match v.cmp(&val_i) {
+                Ordering::Less => {
+                    self.mem.pop_back();
+                },
+                Ordering::Equal => {
+                    tie = true;
+                    self.mem.pop_back();
+                },
+                Ordering::Greater => break,
+            }
+        }
+
+        // if at this point we cleared the whole deque, left check passed
+        // baring any ties
+        if self.mem.is_empty() {
+            self.passes_left_check = !tie;
+        }
+
+        self.mem.push_back((i, val_i));
+
+        let passes_right_check = i >= self.h && self.mem.front().is_some_and(|&(idx, _)| idx == i - self.h);
+        (passes_right_check && self.passes_left_check)
+            .then(|| i - self.h)
     }
 }
 
@@ -109,6 +132,7 @@ mod tests {
     use crate::boundary::test_support::validate_happy_h2;
     use crate::boundary::test_support::validate_backwards_range;
     use crate::boundary::test_support::validate_end_0;
+    use crate::boundary::test_support::validate_short_data;
     use crate::boundary::reference::Reference;
     use crate::boundary::test_support::{assert_same, REAL_FILES};
     use crate::test_support::{ mixed_data, Rng, HS };
@@ -124,8 +148,8 @@ mod tests {
     }
 
     #[test]
-    fn find_boundary_data_len_less_than_8() {
-        
+    fn find_boundaries_short_data() {
+        validate_short_data(Extremum::new);
     }
 
     #[test]

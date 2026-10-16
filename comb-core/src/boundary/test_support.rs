@@ -1,5 +1,5 @@
 use std::range::Range;
-use super::BoundaryFinder;
+use super::{BoundaryFinder, ScanStats};
 
 pub(super) const TEST_DATA: [u8; 32] = 
         [50, 12, 127, 1, 230, 71, 60, 0, 
@@ -64,6 +64,33 @@ pub(super) fn validate_end_0<F: BoundaryFinder>(new: fn(usize) -> F) {
     let finder = new(1);
     let mut output = Vec::new();
     finder.find_boundaries(&TEST_DATA, (0..0).into(), &mut output);
+}
+
+/// Data too short for any position to have a full window gives no boundaries and no
+/// panics. A position p needs p >= h and p + h + 8 <= len, so the first length that
+/// can have a boundary is 8 + 2h. The data puts one strict peak at h, so at exactly
+/// that length the only boundary is h.
+pub(super) fn validate_short_data<F: BoundaryFinder>(new: fn(usize) -> F) {
+    // h starts at 1: with h == 0 the only candidate is p == 0, which D2 excludes
+    for h in [1, 2, 3, 5, 8, 16, 33, 64] {
+        let finder = new(h);
+        let min_len = 8 + 2 * h;
+
+        for len in 0..=min_len {
+            let data: Vec<u8> = (0..len)
+                .map(|i| if i == h { 0xFF } else { (i % 7) as u8 })
+                .collect();
+            let mut output = Vec::new();
+            let stats = finder.find_boundaries(&data, (0..len).into(), &mut output);
+
+            if len < min_len {
+                assert_eq!(output, vec![], "h {h}, len {len}: expected no boundaries.");
+                assert_eq!(stats, ScanStats::empty(), "h {h}, len {len}: expected empty stats.");
+            } else {
+                assert_eq!(output, vec![h], "h {h}, len {len}: expected only the peak at h.");
+            }
+        }
+    }
 }
 
 /// Real-world-ish input: this crate's own source files, embedded at compile time.
