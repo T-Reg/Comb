@@ -30,6 +30,7 @@ pub struct Chunk {
 
 impl Chunk {
     /// The index of the last byte in the chunk, exclusive.
+    #[must_use]
     pub fn end_pos(&self) -> usize {
         self.offset + self.len
     }
@@ -62,6 +63,7 @@ pub struct ChunkingStats {
 
 impl ChunkingStats {
     /// initialize with stats from the boundary scan
+    #[must_use]
     pub fn new(scan: ScanStats) -> Self {
         Self {
             scan_stats: scan,
@@ -70,6 +72,7 @@ impl ChunkingStats {
     }
 
     /// Initualize with empty/default values.
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             scan_stats: ScanStats::empty(),
@@ -107,13 +110,13 @@ impl Display for DataReassemblyError {
     }
 }
 
-/// Cuts the data into chunks based on the boundaries found by the BoundaryFinder.
+/// Cuts the data into chunks based on the boundaries found by the `BoundaryFinder`.
 /// if range has length 0, empty Vec is returned.
 ///
 /// # Panics
 ///
 /// - if range.start > range.end
-/// - if range.end > data.len()
+/// - if range.end > `data.len()`
 /// - if range.end <= 0
 pub fn chunk_range<F : BoundaryFinder>(data: &[u8], range: Range<usize>, finder: &F) -> (Vec<Chunk>, ChunkingStats) {
     assert!(range.start <= range.end, "invalid range: start > end");
@@ -140,7 +143,7 @@ pub fn chunk_range<F : BoundaryFinder>(data: &[u8], range: Range<usize>, finder:
         }
         
         chunks.push(Chunk {
-            id: ChunkId::calculate(&data[start..index as usize]),
+            id: ChunkId::calculate(&data[start..index]),
             offset: start,
             len: index - start,
             end: BoundaryKind::Rule,
@@ -192,7 +195,7 @@ pub fn reassemble_chunks(chunks: &Vec<Chunk>, data_store: &HashMap<ChunkId, Vec<
             return Err(DataReassemblyError::LengthMismatch { id: chunk.id, exp: chunk.len, act: bytes.len() });
         }
 
-        result.extend_from_slice(&bytes);
+        result.extend_from_slice(bytes);
     }
 
     Ok(result)

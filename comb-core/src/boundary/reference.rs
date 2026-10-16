@@ -17,6 +17,7 @@ pub struct Reference {
 impl Reference {
     /// Constructor where h is the window size for boundary rule. A position, p, is a
     /// boundary if it is the strict maximum within (p - h)..(p + h).
+    #[must_use]
     pub fn new(h: usize) -> Self {
         Self { h }
     }

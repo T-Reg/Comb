@@ -24,6 +24,7 @@ pub struct ScanStats {
 
 impl ScanStats {
     /// built with zero'd or default values
+    #[must_use]
     pub fn empty() -> Self {
         Self {
             bytes_scanned: 0,
@@ -40,14 +41,14 @@ pub trait BoundaryFinder {
     /// 'data' is the whole file. The whole file is passed due to the necesity of accessing
     /// data outside the range near the range boundaries due to extremum algorithm sliding 
     /// window calculations
-    /// At tier 1, the range is just 0..data.len()
+    /// At tier 1, the range is just `0..data.len()`
     fn find_boundaries(&self, data: &[u8], range: Range<usize>, out: &mut Vec<usize>) -> ScanStats;
 
     /// The expected mean chunk size for this boundary finder.
     fn mean_chunk_size(&self) -> usize;
 
     /// the max chunk size at which point we clamp and declare an arbitrary chunk boundary.
-    /// by default, it is 8 x mean_chunk_size.
+    /// by default, it is 8 x `mean_chunk_size`.
     #[inline]
     fn max_chunk_size(&self) -> usize {
         MAX_CHUNK_LEN_MEAN_MULTIPLIER * self.mean_chunk_size()

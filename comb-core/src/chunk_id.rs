@@ -13,16 +13,19 @@ pub struct ChunkId([u8; 32]);
 
 impl ChunkId {
     /// Calculate and return the blake3 hash chunk id.
+    #[must_use]
     pub fn calculate(chunk_bytes: &[u8]) -> Self {
         Self(*blake3::hash(chunk_bytes).as_bytes())
     }
 
     /// construct chunk id from already calculated blake3 hash bytes
+    #[must_use]
     pub const fn from_bytes(bytes: [u8; 32]) -> Self {
         Self(bytes)
     }
 
     /// get the raw byte value of the blake3 hash
+    #[must_use]
     pub const fn as_bytes(&self) -> &[u8; 32] {
         &self.0
     }
@@ -48,7 +51,7 @@ impl fmt::Debug for ChunkId {
 
 fn fmt_write_bytes(bytes: &[u8], f: &mut Formatter<'_>) -> fmt::Result {
     for byte in bytes {
-        write!(f, "{:02x}", byte)?;
+        write!(f, "{byte:02x}")?;
     }
     Ok(())
 }
