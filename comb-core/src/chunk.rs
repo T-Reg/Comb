@@ -247,14 +247,14 @@ mod tests {
     #[test]
     fn test_chunk_full_data() {
         for data in CASES.iter() {
-            validate_chunking(&data, (0..data.len()).into());
+            validate_chunking(data, (0..data.len()).into());
         }
     }
 
     #[test]
     fn test_chunk_inner_range() {
         for data in CASES.iter() {
-            validate_chunking(&data, (((data.len() / 10) as usize)..data.len() / 2).into());
+            validate_chunking(data, ((data.len() / 10)..data.len() / 2).into());
         }
     }
 
@@ -262,8 +262,8 @@ mod tests {
         for h in HS {
             let finder = Extremum::new(h);
             let reference = Reference::new(h);
-            let (chunks, stats) = chunk_range(&data, range, &finder);
-            let (ref_chunks, ref_stats) = chunk_range(&data, range, &reference);
+            let (chunks, stats) = chunk_range(data, range, &finder);
+            let (ref_chunks, ref_stats) = chunk_range(data, range, &reference);
 
             // chunks and stats agree with reference
             assert_eq!(chunks, ref_chunks, "Chunks did not match reference chunks.");
@@ -334,7 +334,7 @@ mod tests {
                     );
                 }
                 Err(e) => {
-                    panic!("hit unexpected error reassembling the data: {}", e);
+                    panic!("hit unexpected error reassembling the data: {e}");
                 }
             }
         }

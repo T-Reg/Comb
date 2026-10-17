@@ -36,7 +36,7 @@ proptest! {
                 );
             }
             Err(e) => {
-                panic!("hit unexpected error reassembling the data: {}", e);
+                panic!("hit unexpected error reassembling the data: {e}");
             }
         }
     }
@@ -76,7 +76,7 @@ proptest! {
                 if prev == 0 {
                     prev = chunk.end_pos();
                 } else {
-                    assert!(h + 1 <= chunk.end_pos() - prev,
+                    assert!(h < chunk.end_pos() - prev,
                            "A chunk did not follow the min spacing theorem.");
                     prev = chunk.end_pos();
                 }

@@ -53,6 +53,7 @@ pub(super) fn validate_happy_h2<F: BoundaryFinder>(new: fn(usize) -> F) {
     assert_eq!(output, vec![4, 12, 20]);
 }
 
+#[expect(clippy::reversed_empty_ranges, reason = "Intentional test for backwards range.")]
 pub(super) fn validate_backwards_range<F: BoundaryFinder>(new: fn(usize) -> F) {
     let finder = new(1);
     let mut output = Vec::new();
@@ -77,7 +78,7 @@ pub(super) fn validate_short_data<F: BoundaryFinder>(new: fn(usize) -> F) {
 
         for len in 0..=min_len {
             let data: Vec<u8> = (0..len)
-                .map(|i| if i == h { 0xFF } else { (i % 7) as u8 })
+                .map(|i| if i == h { 0xFF } else { u8::try_from(i % 7).expect("i % 7 fits in u8") })
                 .collect();
             let mut output = Vec::new();
             let stats = finder.find_boundaries(&data, (0..len).into(), &mut output);

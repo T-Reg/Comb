@@ -18,9 +18,14 @@ impl Rng {
         x
     }
 
+    /// The low byte of the next value, same byte an `as u8` cast would keep.
+    pub(super) fn next_byte(&mut self) -> u8 {
+        self.next().to_le_bytes()[0]
+    }
+
     /// Value in 0..n. n must be > 0.
     pub(super) fn below(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
+        usize::try_from(self.next() % n as u64).expect("value is below n, so it fits in usize")
     }
 }
 
@@ -34,19 +39,19 @@ pub(super) fn mixed_data(rng: &mut Rng, len: usize) -> Vec<u8> {
             // random bytes: the normal case
             0 => {
                 for _ in 0..run {
-                    data.push(rng.next() as u8);
+                    data.push(rng.next_byte());
                 }
             }
             // one repeated byte: lots of equal values, hits the tie path
             1 => {
-                let b = rng.next() as u8;
+                let b = rng.next_byte();
                 data.extend(std::iter::repeat_n(b, run));
             }
             // zeros: low-entropy data with no strict maximum
             2 => data.extend(std::iter::repeat_n(0, run)),
             // descending ramp: every value smaller than the last, so the deque grows long
             _ => {
-                let mut b = rng.next() as u8;
+                let mut b = rng.next_byte();
                 for _ in 0..run {
                     data.push(b);
                     b = b.wrapping_sub(1);
