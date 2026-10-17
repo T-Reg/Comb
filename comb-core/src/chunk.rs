@@ -63,8 +63,8 @@ pub enum BoundaryKind {
     RangeEnd,
 }
 
-#[derive(Debug, Eq, PartialEq)]
 /// Stats produced by the chunking run
+#[derive(Debug, Eq, PartialEq)]
 pub struct ChunkingStats {
     /// The stats carried over from the boundary scan
     pub scan_stats: ScanStats,
@@ -307,7 +307,6 @@ mod tests {
             }
 
             // no gaps or overlaps in the chunks.
-            println!("created {} chunks.", chunks.len());
             if chunks.len() > 1 {
                 for i in 0..chunks.len() - 1 {
                     let chunk_1 = &chunks[i];
