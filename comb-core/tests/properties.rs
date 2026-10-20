@@ -172,4 +172,64 @@ proptest! {
             }
         }
     }
+
+    // ensure that for any range [a, b), find_boundaries(data, a..b) is equivalent to 
+    // find_boundaries(data, 0..data.len()) filtered to [a, b)
+    #[test]
+    fn prop_descent_equivalence(data in prop_oneof![
+                prop::collection::vec(any::<u8>(), 0..4096),
+                prop::collection::vec(0u8..2, 0..4096),
+                prop::collection::vec(Just(0u8), 0..4096),
+            ],
+            h in 0usize..128,
+            a in any::<prop::sample::Index>(),
+            b in any::<prop::sample::Index>()) {
+        let a_i = a.index(data.len() + 1);
+        let b_i = b.index(data.len() + 1);
+        let range = if a_i < b_i { (a_i..b_i).into() } else { (b_i..a_i).into() };
+        let finder = Extremum::new(h);
+
+        let mut boundaries_ab: Vec<usize> = Vec::new();
+        finder.find_boundaries(&data, range, &mut boundaries_ab);
+
+        let mut boundaries_full: Vec<usize> = Vec::new();
+        finder.find_boundaries(&data, (0..data.len()).into(), &mut boundaries_full);
+        let boundaries_filtered: Vec<usize> = boundaries_full.into_iter()
+            .filter(|p| range.start < *p && range.end > *p).collect();
+        
+        assert_eq!(
+            boundaries_ab,
+            boundaries_filtered,
+            "Expected find boundaries of a..b to be the same as a full boundary scan, filtered to a..b"
+        )
+    }
+
+    // If we have two h values, h_fine and h_coarse where h_fine < h_coarse, boundaries found by h_coarse are a subset of 
+    // of those from h_fine.
+    #[test]
+    fn prop_nested_boundaries(data in prop_oneof![
+                prop::collection::vec(any::<u8>(), 0..4096),
+                prop::collection::vec(0u8..2, 0..4096),
+                prop::collection::vec(Just(0u8), 0..4096),
+            ],
+            h1 in 0usize..128,
+            h2 in 0usize..128,
+            a in any::<prop::sample::Index>(),
+            b in any::<prop::sample::Index>(),) {
+        let a_i = a.index(data.len() + 1);
+        let b_i = b.index(data.len() + 1);
+        let range = if a_i < b_i { (a_i..b_i).into() } else { (b_i..a_i).into() };
+        let h_fine = if h1 < h2 { h1 } else { h2 };
+        let h_coarse = if h1 < h2 { h2 } else { h1 };
+        let finder_fine = Extremum::new(h_fine);
+        let finder_coarse = Extremum::new(h_coarse);
+
+        let mut boundaries_fine: Vec<usize> = Vec::new();
+        finder_fine.find_boundaries(&data, range, &mut boundaries_fine);
+
+        let mut boundaries_coarse: Vec<usize> = Vec::new();
+        finder_coarse.find_boundaries(&data, range, &mut boundaries_coarse);
+
+        assert!(boundaries_coarse.iter().all(|b| boundaries_fine.contains(b)));
+    }
 }
