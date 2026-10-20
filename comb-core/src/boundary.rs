@@ -1,8 +1,10 @@
 //! Finds chunk boundaries in a dataset
 
-pub mod extremum;
-mod local_max;
 pub mod reference;
+pub use reference::Reference;
+pub mod extremum;
+pub use extremum::Extremum;
+mod local_max;
 
 #[cfg(test)]
 mod test_support;

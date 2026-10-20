@@ -17,7 +17,7 @@ repository = "https://github.com/T-Reg/Comb"
 # Lints are declared once here and inherited by any crate carrying
 # `[lints] workspace = true`. Without that opt-in line these tables do nothing.
 [workspace.lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
 missing_docs = "warn"
 missing_debug_implementations = "warn"
 
