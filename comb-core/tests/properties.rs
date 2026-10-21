@@ -201,7 +201,7 @@ proptest! {
             boundaries_ab,
             boundaries_filtered,
             "Expected find boundaries of a..b to be the same as a full boundary scan, filtered to a..b"
-        )
+        );
     }
 
     // If we have two h values, h_fine and h_coarse where h_fine < h_coarse, boundaries found by h_coarse are a subset of

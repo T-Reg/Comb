@@ -11,14 +11,18 @@ pub struct Ladder<F: BoundaryFinder> {
 }
 
 impl<F: BoundaryFinder> Ladder<F> {
-    /// Build a ladder with the boundary finders.
-
+    /// Build a ladder with the boundary finders.  Must he in ascending order by `mean_chunk_size`.
+    ///
+    /// # Panics
+    ///
+    /// if tiers is empty or not in ascending order.
+    #[must_use]
     pub fn new(tiers: Vec<F>) -> Self {
         assert!(!tiers.is_empty(), "Cannot create a ladder with no tiers");
 
         let mut prev = tiers[0].mean_chunk_size();
-        for i in 1..tiers.len() {
-            let curr = tiers[i].mean_chunk_size();
+        for t in tiers.iter().skip(1) {
+            let curr = t.mean_chunk_size();
             assert!(curr > prev);
             prev = curr;
         }

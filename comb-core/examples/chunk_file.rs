@@ -171,7 +171,7 @@ fn human(bytes: usize) -> String {
 
     let mut value = bytes;
     let mut unit = 0;
-    while value >= 1024 && value % 1024 == 0 && unit < UNITS.len() - 1 {
+    while value >= 1024 && value.is_multiple_of(1024) && unit < UNITS.len() - 1 {
         value /= 1024;
         unit += 1;
     }
