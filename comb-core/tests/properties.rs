@@ -173,7 +173,7 @@ proptest! {
         }
     }
 
-    // ensure that for any range [a, b), find_boundaries(data, a..b) is equivalent to 
+    // ensure that for any range [a, b), find_boundaries(data, a..b) is equivalent to
     // find_boundaries(data, 0..data.len()) filtered to [a, b)
     #[test]
     fn prop_descent_equivalence(data in prop_oneof![
@@ -196,7 +196,7 @@ proptest! {
         finder.find_boundaries(&data, (0..data.len()).into(), &mut boundaries_full);
         let boundaries_filtered: Vec<usize> = boundaries_full.into_iter()
             .filter(|p| range.start < *p && range.end > *p).collect();
-        
+
         assert_eq!(
             boundaries_ab,
             boundaries_filtered,
@@ -204,7 +204,7 @@ proptest! {
         )
     }
 
-    // If we have two h values, h_fine and h_coarse where h_fine < h_coarse, boundaries found by h_coarse are a subset of 
+    // If we have two h values, h_fine and h_coarse where h_fine < h_coarse, boundaries found by h_coarse are a subset of
     // of those from h_fine.
     #[test]
     fn prop_nested_boundaries(data in prop_oneof![

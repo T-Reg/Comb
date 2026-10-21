@@ -4,6 +4,7 @@
 pub mod boundary;
 pub mod chunk;
 pub mod chunk_id;
+pub mod ladder;
 
 #[cfg(test)]
 mod test_support;
