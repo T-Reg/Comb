@@ -90,8 +90,12 @@ mod tests {
 
     #[test]
     fn new_valid_ladder() {
-        let ladder = Ladder::new(vec![Extremum::new(2), Extremum::new(32), Extremum::new(512)])
-            .expect("valid ladder");
+        let ladder = Ladder::new(vec![
+            Extremum::new(2),
+            Extremum::new(32),
+            Extremum::new(512),
+        ])
+        .expect("valid ladder");
         let means: Vec<usize> = ladder
             .tiers()
             .iter()
@@ -126,8 +130,8 @@ mod tests {
 
     #[test]
     fn new_duplicate() {
-        let err = Ladder::new(vec![Extremum::new(2), Extremum::new(8), Extremum::new(8)])
-            .unwrap_err();
+        let err =
+            Ladder::new(vec![Extremum::new(2), Extremum::new(8), Extremum::new(8)]).unwrap_err();
         assert_eq!(
             err,
             LadderError::NotAscending {
