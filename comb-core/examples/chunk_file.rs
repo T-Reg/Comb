@@ -1,6 +1,6 @@
 //! Small executable for testing the chunking code. Given a file and
 //! a window size, it prints the number of chunks and some useful
-//! statistics: mean/median/p99 chunk size, a size histogram, the
+//! statistics: mean/std dev/CV/median/p99 chunk size, a size histogram, the
 //! clamp-cut rate and throughput.
 //!
 //! Usage: `chunk_file <path> <h>`
@@ -92,6 +92,19 @@ struct Summary<'a> {
 fn print_summary(s: &Summary) {
     let n = s.lens.len();
     let mean = s.file_len as f64 / n as f64;
+    // Population standard deviation, two-pass: summing squared deviations from the
+    // already-known mean avoids the cancellation of a raw sum-of-squares accumulator.
+    let variance = s
+        .lens
+        .iter()
+        .map(|&len| {
+            let d = len as f64 - mean;
+            d * d
+        })
+        .sum::<f64>()
+        / n as f64;
+    let std_dev = variance.sqrt();
+    let cv = std_dev / mean;
     let median = s.lens[n / 2];
     // Nearest-rank p99: the smallest length with at least 99% of chunks at or below it.
     let p99 = s.lens[(99 * n).div_ceil(100) - 1];
@@ -114,6 +127,7 @@ fn print_summary(s: &Summary) {
         s.expected_mean,
         mean / s.expected_mean as f64
     );
+    println!("std dev     {std_dev:.0} B  (CV {cv:.3})");
     println!("median      {median} B");
     println!("p99         {p99} B");
     println!(

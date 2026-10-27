@@ -18,4 +18,4 @@ target
 # and it is noise in a commit history meant to be read.
 .idea/
 
-tmp/*
+tmp/

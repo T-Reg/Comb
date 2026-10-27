@@ -21,7 +21,7 @@ impl<F: BoundaryFinder> Ladder<F> {
     /// # Errors
     ///
     /// - `LadderError::Empty` if tiers is empty.
-    /// - `LadderError::NotAscending` if any tier's mean chunk size is not strictly larger than
+    /// - `LadderError::NotDescending` if any tier's mean chunk size is not strictly larger than
     ///   the one before it.
     pub fn new(tiers: Vec<F>) -> Result<Self, LadderError> {
         if tiers.is_empty() {
@@ -31,8 +31,8 @@ impl<F: BoundaryFinder> Ladder<F> {
         for (i, pair) in tiers.windows(2).enumerate() {
             let prev = pair[0].mean_chunk_size();
             let curr = pair[1].mean_chunk_size();
-            if curr <= prev {
-                return Err(LadderError::NotAscending {
+            if curr >= prev {
+                return Err(LadderError::NotDescending {
                     index: i + 1,
                     prev,
                     curr,
@@ -43,10 +43,26 @@ impl<F: BoundaryFinder> Ladder<F> {
         Ok(Self { tiers })
     }
 
-    /// The finders for each tier, finest first.
+    /// Return the finder for the requested tier
+    ///
+    /// # Panics
+    ///
+    /// If the requested tier does not exists (index outside of vec's range.)
     #[must_use]
-    pub fn tiers(&self) -> &[F] {
-        &self.tiers
+    pub fn get_tier(&self, tier: usize) -> &F {
+        &self.tiers[tier]
+    }
+
+    /// Return the number of tiers in the ladder.
+    #[must_use]
+    pub fn tier_count(&self) -> usize {
+        self.tiers.len()
+    }
+
+    /// Return the final (most fine/smallest mean chunk size) tier.
+    #[must_use]
+    pub fn last_tier(&self) -> &F {
+        &self.tiers[&self.tiers.len() - 1]
     }
 }
 
@@ -57,7 +73,7 @@ pub enum LadderError {
     Empty,
 
     /// The tier's mean chunk size was not strictly larger than the previous tier's.
-    NotAscending {
+    NotDescending {
         /// index of the offending tier.
         index: usize,
         /// mean chunk size of the tier before it.
@@ -73,7 +89,7 @@ impl Display for LadderError {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
             Self::Empty => write!(f, "Cannot create a ladder with no tiers."),
-            Self::NotAscending { index, prev, curr } => write!(
+            Self::NotDescending { index, prev, curr } => write!(
                 f,
                 "Tier {index} has mean chunk size {curr}, which is not larger than the previous \
                  tier's {prev}. Tiers must be in strictly ascending order."
@@ -91,9 +107,9 @@ mod tests {
     #[test]
     fn new_valid_ladder() {
         let ladder = Ladder::new(vec![
-            Extremum::new(2),
-            Extremum::new(32),
             Extremum::new(512),
+            Extremum::new(32),
+            Extremum::new(2),
         ])
         .expect("valid ladder");
         let means: Vec<usize> = ladder
@@ -116,14 +132,14 @@ mod tests {
     }
 
     #[test]
-    fn new_descending() {
-        let err = Ladder::new(vec![Extremum::new(32), Extremum::new(2)]).unwrap_err();
+    fn new_ascending() {
+        let err = Ladder::new(vec![Extremum::new(2), Extremum::new(32)]).unwrap_err();
         assert_eq!(
             err,
-            LadderError::NotAscending {
+            LadderError::NotDescending {
                 index: 1,
-                prev: 65,
-                curr: 5
+                prev: 5,
+                curr: 65
             }
         );
     }
@@ -134,7 +150,7 @@ mod tests {
             Ladder::new(vec![Extremum::new(2), Extremum::new(8), Extremum::new(8)]).unwrap_err();
         assert_eq!(
             err,
-            LadderError::NotAscending {
+            LadderError::NotDescending {
                 index: 2,
                 prev: 17,
                 curr: 17
