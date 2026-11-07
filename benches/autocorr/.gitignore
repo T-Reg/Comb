@@ -1,0 +1,6 @@
+# Raw per-anchor tables, the superseded first run and logs are archived on hive
+# (~/comb-archive/autocorr-2026-10-29/); only the summaries and scripts are tracked.
+/by-type/*
+!/by-type/SUMMARY-by-type.md
+/first-run/
+/logs/
